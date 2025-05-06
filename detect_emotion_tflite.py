@@ -4,15 +4,13 @@ import cv2
 import mediapipe as mp
 
 class FacialExpressionModel(object):
-
-    EMOTIONS_LIST = ["Angry", "Disgust", "Fear", "Happy",
-                    "Sad", "Surprise", "Neutral"]
-
     def __init__(self, model_path):
         self.interpreter = tf.lite.Interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
+        self.EMOTIONS_LIST = ["Angry", "Disgust", "Fear", "Happy",
+                                "Sad", "Surprise", "Neutral"]
 
     def predict_emotion(self, img):
         img = np.expand_dims(img, axis=0)
@@ -23,18 +21,22 @@ class FacialExpressionModel(object):
         self.interpreter.invoke()
 
         preds = self.interpreter.get_tensor(self.output_details[0]['index'])
-        return FacialExpressionModel.EMOTIONS_LIST[np.argmax(preds)]
+        return self.EMOTIONS_LIST[np.argmax(preds)]
 
 class VideoCamera(object):
     def __init__(self,path):
         self.video = cv2.VideoCapture(path)
+        mp_face_mesh = mp.solutions.face_mesh
+        self.face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, 
+                                        min_detection_confidence=0.5, 
+                                        min_tracking_confidence=0.5)
     def __del__(self):
         self.video.release()
     def get_frame(self):
         _, fr = self.video.read()
 
         rgb_frame = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(rgb_frame)
+        results = self.face_mesh.process(rgb_frame)
 
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
@@ -58,31 +60,24 @@ class VideoCamera(object):
 
                 if roi.size > 0:
                     pred = emotion_model.predict_emotion(roi)
-                cv2.putText(fr, pred, (x_min, y_min), font, 1, (255, 255, 0), 2)
+                cv2.putText(fr, pred, (x_min, y_min), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
                 cv2.rectangle(fr,(x_min,y_min),(x_max,y_max),(255,0,0),2)
         return fr
-
-
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True, 
-                                min_detection_confidence=0.5, 
-                                min_tracking_confidence=0.5)
-
-model = "models/model.tflite"
-emotion_model = FacialExpressionModel(model)
-font = cv2.FONT_HERSHEY_SIMPLEX
-
-def gen(camera):
-    while True:
-        frame = camera.get_frame()
-        cv2.imshow('frame', frame) 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-    cv2.destroyAllWindows()
+    
+    def gen(self):
+        while True:
+            frame = self.get_frame()
+            cv2.imshow('frame', frame) 
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        cv2.destroyAllWindows()
 
 if __name__ == '__main__':
+    model = "models/model.tflite"
+    emotion_model = FacialExpressionModel(model)
+    
     camera = VideoCamera(0)
-    gen(camera)
+    camera.gen()
 
 
 
